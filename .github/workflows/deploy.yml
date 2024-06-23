@@ -1,0 +1,151 @@
+name: Test & Deploy
+on:
+  push:
+    branches:
+      - master
+      - 'feature/**'
+      - 'fix/**'
+
+jobs:
+  init:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.setvars.outputs.environment }}
+    steps:
+      - name: Set variables
+        id: setvars
+        run: |
+          if [[ "${{github.ref}}" == "refs/heads/master" ]]; then
+            echo "environment=prod" >> $GITHUB_OUTPUT
+          fi
+
+          if [[ "${{github.ref}}" == refs/heads/feature/* || ${{github.ref}} == refs/headers/fix/* ]]; then
+            echo "environment=dev" >> $GITHUB_OUTPUT
+          fi
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: init
+    if: ${{ (needs.init.outputs.environment != '') }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "^1.22"
+      - name: Setup env
+        run: cp .env.example .env && cat .env
+      - name: Start DB
+        run: docker-compose up -d go-deploy-tf-aws-db && docker-compose ps
+      - name: Test
+        run: make test
+
+  tag:
+    name: Set tag
+    runs-on: ubuntu-latest
+    needs: [init, test]
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.PUSH_GH_TAG_TOKEN }}
+      - name: Configure Git
+        run: |
+          git config --global user.name "$GITHUB_ACTOR"
+          git config --global user.email "$GITHUB_ACTOR@users.noreply.github.com"
+      - name: Setup go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "^1.22"
+      - name: Install ccv
+        run: go install github.com/smlx/ccv/cmd/ccv@latest
+      - name: Bump tag if necessary
+        id: tag
+        run: |
+          if [ "${{ needs.init.outputs.environment }}" == "prod" ]; then
+            if [ -z $(git tag -l $(ccv)) ]; then
+              git tag $(ccv)
+              git push origin tag $(ccv)
+              echo $(ccv)
+              echo "tag=$(ccv)" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    name: Build & Push Image
+    runs-on: ubuntu-latest
+    needs: tag
+    if: ${{ (needs.tag.outputs.tag != '') }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-1
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Build, tag, and push image to Amazon ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: go-deploy-tf-aws
+          IMAGE_TAG: ${{ needs.tag.outputs.tag }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f deploy/Dockerfile .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+      - name: Log out of Amazon ECR
+        if: always()
+        run: docker logout ${{ steps.login-ecr.outputs.registry }}
+
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: [init, tag, build]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.4
+
+      - name: Terraform Init
+        id: init
+        working-directory: deploy/tf
+        run: terraform init -backend-config="key=${{needs.init.outputs.environment}}" 
+
+      - name: Terraform Plan
+        id: plan
+        working-directory: deploy/tf
+        run: |
+          terraform plan \
+            -var="tag=${{ needs.tag.outputs.tag }}" \
+            --var-file="./overrides/${{needs.init.outputs.environment}}.tfvars"
+      
+      - name: Terraform Apply
+        id: apply
+        working-directory: deploy/tf
+        run: |
+          terraform apply \
+            -var="tag=${{ needs.tag.outputs.tag }}" \
+            --var-file="./overrides/${{needs.init.outputs.environment}}.tfvars" \
+            -auto-approve

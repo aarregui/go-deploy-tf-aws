@@ -1,0 +1,10 @@
+vendor/
+deploy/tf/.terraform
+.infracost
+.terraform.lock.hcl
+.env
+coverage.*
+__debug_bin
+core/
+main.out
+.vscode

@@ -1,0 +1,54 @@
+services:
+  go-deploy-tf-aws:
+    image: golang:1.22.0
+    tty: true
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile.debug
+    container_name: go-deploy-tf-aws
+    command: bash -c "make local-deps && make watch"
+    restart: unless-stopped
+    networks: 
+      - go-deploy-tf-aws
+    ports:
+      - ${APP_PORT}:8002
+      # - 4000:4000
+    working_dir: /app
+    volumes:
+      - ./:/app
+      - go-volume:/go
+    environment:
+      - DB_HOST=go-deploy-tf-aws-db
+      - APP_PORT=8002
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION}
+    depends_on:
+      go-deploy-tf-aws-db:
+        condition: service_healthy
+  go-deploy-tf-aws-db:
+    image: postgres:14.10
+    user: postgres
+    container_name: go-deploy-tf-aws-db
+    restart: unless-stopped
+    networks: 
+      - go-deploy-tf-aws
+    ports:
+      - ${DB_PORT}:${DB_PORT}
+    volumes:
+      - db-volume:/var/lib/postgresql/data/
+    environment:
+      - PGPORT=${DB_PORT}
+      - POSTGRES_DB=${DB_DATABASE}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_USER=${DB_USERNAME}
+    healthcheck:
+      test: "pg_isready -U ${DB_USERNAME} -d ${DB_DATABASE}"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+volumes:
+  db-volume:
+  go-volume:
+networks: 
+  go-deploy-tf-aws:
