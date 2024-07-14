@@ -1,6 +1,6 @@
 package main
 
-import "github.com/aarregui/go-deploy-tf-aws/cli"
+import "github.com/aarregui/go-deploy-tf-aws/internal/cli"
 
 func main() {
 	cli := cli.New()
