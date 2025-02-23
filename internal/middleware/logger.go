@@ -1,12 +1,12 @@
 package middleware
 
 import (
+	"log/slog"
 	"net"
 	"net/http"
 	"time"
 
 	m "github.com/go-chi/chi/v5/middleware"
-	"github.com/rs/zerolog/log"
 )
 
 type LoggerFields struct {
@@ -31,20 +31,22 @@ func Logger(next http.Handler) http.Handler {
 			if err != nil {
 				remoteIP = r.RemoteAddr
 			}
-			logger := log.Info().
-				Str("method", r.Method).
-				Str("uri", r.RequestURI).
-				Int("status_code", ww.Status()).
-				Int("bytes", ww.BytesWritten()).
-				Int64("duration", int64(time.Since(t1))).
-				Str("duration_display", time.Since(t1).String()).
-				Str("remote_ip", remoteIP).
-				Str("proto", r.Proto)
-
-			if len(reqID) > 0 {
-				logger = logger.Str("request_id", reqID)
+			attrs := []slog.Attr{
+				slog.String("method", r.Method),
+				slog.String("uri", r.RequestURI),
+				slog.Int("status_code", ww.Status()),
+				slog.Int("bytes", ww.BytesWritten()),
+				slog.Duration("duration", time.Since(t1)),
+				slog.String("duration_display", time.Since(t1).String()),
+				slog.String("remote_ip", remoteIP),
+				slog.String("proto", r.Proto),
 			}
-			logger.Msg("")
+
+			if reqID != "" {
+				attrs = append(attrs, slog.String("request_id", reqID))
+			}
+
+			slog.LogAttrs(r.Context(), slog.LevelInfo, "", attrs...)
 		}()
 
 		next.ServeHTTP(ww, r)

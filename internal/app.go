@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -11,7 +12,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/rs/zerolog/log"
 
 	m "github.com/aarregui/go-deploy-tf-aws/internal/middleware"
 )
@@ -48,13 +48,13 @@ func (a app) Serve() error {
 
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Error().Err(err).Msg("server failed to start")
+			slog.Error("server failed to start", "error", err)
 		}
 	}()
-	log.Info().Msg(fmt.Sprintf("server version [%s] listening on post: %s", a.config.Version, a.config.App.Port))
+	slog.Info(fmt.Sprintf("server version [%s] listening on post: %s", a.config.Version, a.config.App.Port))
 
 	<-done
-	log.Info().Msg("server stopped")
+	slog.Info("server stopped")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer func() {
@@ -64,7 +64,7 @@ func (a app) Serve() error {
 		return err
 	}
 
-	log.Info().Msg("server exited properly")
+	slog.Info("server exited properly")
 
 	return nil
 }

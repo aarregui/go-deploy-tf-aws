@@ -3,6 +3,7 @@ package middleware_test
 import (
 	"bytes"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,7 +11,6 @@ import (
 	"github.com/aarregui/go-deploy-tf-aws/internal/middleware"
 	"github.com/go-chi/chi/v5"
 	m "github.com/go-chi/chi/v5/middleware"
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -21,7 +21,9 @@ func Test_Logger(t *testing.T) {
 	req.Host = "localhost:8080"
 	buf := new(bytes.Buffer)
 
-	log.Logger = log.Output(buf)
+	handler := slog.NewJSONHandler(buf, nil)
+	log := slog.New(handler)
+	slog.SetDefault(log)
 
 	testRequest(t, req, middleware.Logger)
 
@@ -46,7 +48,9 @@ func Test_Logger_RequestID(t *testing.T) {
 	req.Host = "localhost:8080"
 	buf := new(bytes.Buffer)
 
-	log.Logger = log.Output(buf)
+	handler := slog.NewJSONHandler(buf, nil)
+	log := slog.New(handler)
+	slog.SetDefault(log)
 
 	testRequest(t, req, m.RequestID, middleware.Logger)
 

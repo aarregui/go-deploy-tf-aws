@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"os"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
+	"github.com/lmittmann/tint"
 
 	_ "github.com/golang-migrate/migrate/source/file"
 	driverPostgres "gorm.io/driver/postgres"
@@ -51,9 +52,12 @@ func (r *rdbms) Open() error {
 	c := r.config.DB
 	dataSource := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=disable", c.Host, c.Username, password, c.Database, c.Port)
 
-	log := log.Logger.Level(zerolog.Level(c.LogLevel))
+	handler := tint.NewHandler(os.Stdout, &tint.Options{
+		Level: slog.Level(c.LogLevel),
+	})
+	log := slog.New(handler)
 	db, err := gorm.Open(driverPostgres.Open(dataSource), &gorm.Config{
-		Logger:               zLogger{zerolog: log},
+		Logger:               slogLogger{slog: log},
 		FullSaveAssociations: true,
 		NowFunc: func() time.Time {
 			return time.Now().UTC()
@@ -114,62 +118,61 @@ func (r rdbms) GetCon() *gorm.DB {
 	return r.gorm
 }
 
-type zLogger struct {
-	zerolog zerolog.Logger
+type slogLogger struct {
+	slog *slog.Logger
 }
 
-func (l zLogger) LogMode(level logger.LogLevel) logger.Interface {
-	newlogger := l
+func (l slogLogger) LogMode(level logger.LogLevel) logger.Interface {
+	newLogger := l
 	switch level {
 	case logger.Silent:
-		newlogger.zerolog = l.zerolog.Level(zerolog.Disabled)
+		newLogger.slog = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError + 1}))
 	case logger.Error:
-		newlogger.zerolog = l.zerolog.Level(zerolog.ErrorLevel)
+		newLogger.slog = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
 	case logger.Warn:
-		newlogger.zerolog = l.zerolog.Level(zerolog.WarnLevel)
+		newLogger.slog = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelWarn}))
 	case logger.Info:
-		newlogger.zerolog = l.zerolog.Level(zerolog.InfoLevel)
+		newLogger.slog = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	default:
-		newlogger.zerolog = l.zerolog
+		newLogger.slog = l.slog
 	}
-	return newlogger
+	return newLogger
 }
 
-func (l zLogger) Info(ctx context.Context, msg string, data ...interface{}) {
-	l.zerolog.Info().Msg(fmt.Sprintf(msg, data...))
+func (l slogLogger) Info(ctx context.Context, msg string, data ...interface{}) {
+	l.slog.Info(fmt.Sprintf(msg, data...))
 }
 
-func (l zLogger) Warn(ctx context.Context, msg string, data ...interface{}) {
-	l.zerolog.Warn().Msg(fmt.Sprintf(msg, data...))
+func (l slogLogger) Warn(ctx context.Context, msg string, data ...interface{}) {
+	l.slog.Warn(fmt.Sprintf(msg, data...))
 }
 
-func (l zLogger) Error(ctx context.Context, msg string, data ...interface{}) {
-	l.zerolog.Error().Msg(fmt.Sprintf(msg, data...))
+func (l slogLogger) Error(ctx context.Context, msg string, data ...interface{}) {
+	l.slog.Error(fmt.Sprintf(msg, data...))
 }
 
-func (l zLogger) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
+func (l slogLogger) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
 	elapsed := time.Since(begin)
+	sql, rows := fc()
+
 	switch {
 	case err != nil && !errors.Is(err, gorm.ErrRecordNotFound):
-		sql, rows := fc()
 		if rows == -1 {
-			l.zerolog.Error().Err(err).Dur("elapsed", elapsed).Str("sql", sql).Msg("trace")
+			l.slog.Error("SQL execution error", "elapsed", elapsed, "sql", sql, "error", err)
 		} else {
-			l.zerolog.Error().Err(err).Dur("elapsed", elapsed).Str("sql", sql).Int64("rows", rows).Msg("trace")
+			l.slog.Error("SQL execution error", "elapsed", elapsed, "sql", sql, "rows", rows, "error", err)
 		}
 	case elapsed > 200*time.Millisecond:
-		sql, rows := fc()
 		if rows == -1 {
-			l.zerolog.Warn().Dur("elapsed", elapsed).Str("sql", sql).Msg("trace")
+			l.slog.Warn("Slow SQL query", "elapsed", elapsed, "sql", sql)
 		} else {
-			l.zerolog.Warn().Dur("elapsed", elapsed).Str("sql", sql).Int64("rows", rows).Msg("trace")
+			l.slog.Warn("Slow SQL query", "elapsed", elapsed, "sql", sql, "rows", rows)
 		}
 	default:
-		sql, rows := fc()
 		if rows == -1 {
-			l.zerolog.Info().Dur("elapsed", elapsed).Str("sql", sql).Msg("trace")
+			l.slog.Info("SQL query executed", "elapsed", elapsed, "sql", sql)
 		} else {
-			l.zerolog.Info().Dur("elapsed", elapsed).Str("sql", sql).Int64("rows", rows).Msg("trace")
+			l.slog.Info("SQL query executed", "elapsed", elapsed, "sql", sql, "rows", rows)
 		}
 	}
 }

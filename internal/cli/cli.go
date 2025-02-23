@@ -1,11 +1,10 @@
 package cli
 
 import (
+	"log/slog"
 	"os"
-	"time"
 
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
+	"github.com/lmittmann/tint"
 	"github.com/spf13/cobra"
 
 	"github.com/aarregui/go-deploy-tf-aws/internal"
@@ -40,13 +39,13 @@ func (c *CLI) Execute() {
 	err := rootCmd.Execute()
 	if err != nil {
 		hasError = true
-		log.Error().Err(err).Msg("")
+		slog.Error("failed to execute", "error", err)
 	}
 
 	err = cli.db.Close()
 	if err != nil {
 		hasError = true
-		log.Error().Err(err).Msg("")
+		slog.Error("failed to close db", "error", err)
 	}
 
 	if hasError {
@@ -62,21 +61,30 @@ func init() {
 }
 
 func initLogger() {
-	zerolog.SetGlobalLevel(zerolog.Level(cli.cfg.App.LogLevel))
+	var handler slog.Handler
+	level := slog.Level(cli.cfg.App.LogLevel)
+
 	if cli.cfg.App.Env == internal.ENV_LOCAL {
-		log.Logger = log.Output(zerolog.ConsoleWriter{
-			Out:        os.Stderr,
-			TimeFormat: time.RFC3339,
-		}).With().Caller().Logger()
+		handler = tint.NewHandler(os.Stderr, &tint.Options{
+			Level:     level,
+			AddSource: true,
+		})
 	} else {
-		log.Logger = log.With().Caller().Logger()
+		handler = slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
+			Level:     level,
+			AddSource: true,
+		})
 	}
+
+	logger := slog.New(handler)
+	slog.SetDefault(logger)
 }
 
 func initConfig() {
 	c, err := internal.NewConfig(".env")
 	if err != nil {
-		log.Fatal().Err(err).Msg("")
+		slog.Error("failed to initConfig", "error", err)
+		os.Exit(1)
 	}
 
 	cli.cfg = *c
@@ -85,14 +93,16 @@ func initConfig() {
 func initDB() {
 	rdbms := internal.NewPostgres(cli.cfg)
 	if err := rdbms.Open(); err != nil {
-		log.Fatal().Err(err).Msg("")
+		slog.Error("failed to open db", "error", err)
+		os.Exit(1)
 	}
 
 	cli.db = rdbms
 
 	m, err := internal.NewMigrator(rdbms.GetCon(), cli.cfg.DB.MigrationsPath)
 	if err != nil {
-		log.Fatal().Err(err).Msg("")
+		slog.Error("failed to init migrator", "error", err)
+		os.Exit(1)
 	}
 	cli.migrator = m
 }

@@ -2,7 +2,6 @@ package internal
 
 import (
 	"errors"
-	"log"
 	"os"
 
 	"github.com/joho/godotenv"
@@ -58,7 +57,6 @@ func NewConfig(dotEnvPath string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Println(c)
 
 	if c.DB.Password == "" && c.AWS.RDSMasterPasswordSecretID == "" {
 		return nil, ErrDBPasswordNotSet

@@ -11,7 +11,7 @@ services:
     networks: 
       - go-deploy-tf-aws
     ports:
-      - ${APP_PORT}:8002
+      - ${APP_PORT}:${APP_PORT}
       # - 4000:4000
     working_dir: /app
     volumes:
@@ -19,7 +19,7 @@ services:
       - go-volume:/go
     environment:
       - DB_HOST=go-deploy-tf-aws-db
-      - APP_PORT=8002
+      - APP_PORT=${APP_PORT}
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_REGION=${AWS_REGION}

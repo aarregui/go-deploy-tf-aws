@@ -1,7 +1,8 @@
 package cli
 
 import (
-	"github.com/rs/zerolog/log"
+	"log/slog"
+
 	"github.com/spf13/cobra"
 )
 
@@ -11,7 +12,7 @@ var migrateDownCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		err := cli.app.Migrate().Steps(-1)
 		if err != nil {
-			log.Error().Err(err).Msg("failed to migrate down")
+			slog.Error("failed to migrate down", "error", err)
 		}
 
 		return nil

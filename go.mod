@@ -11,7 +11,7 @@ require (
 	github.com/golang-migrate/migrate/v4 v4.14.1
 	github.com/joho/godotenv v1.4.0
 	github.com/kelseyhightower/envconfig v1.4.0
-	github.com/rs/zerolog v1.15.0
+	github.com/lmittmann/tint v1.0.7
 	github.com/spf13/cobra v1.2.1
 	github.com/stretchr/testify v1.7.1
 	gorm.io/driver/postgres v1.3.7

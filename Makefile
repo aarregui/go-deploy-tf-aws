@@ -23,7 +23,7 @@ install:
 	go install
 
 start:
-	docker compose up -d
+	docker-compose up -d
 
 start-local: build
 	./${BINARY_NAME} serve
@@ -32,9 +32,9 @@ watch:
 	modd
 
 reset:
-	docker compose down -v
-	docker compose up -d
+	docker-compose down -v
+	docker-compose up -d
 	go run main.go migrate up
 
 logs:
-	docker compose logs -f go-deploy-tf-aws
+	docker-compose logs -f go-deploy-tf-aws
