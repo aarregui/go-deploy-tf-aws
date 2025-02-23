@@ -12,7 +12,7 @@ Some of the AWS resources used are:
 The following AWS resources have to be created manually:
 * S3 bucket for Terraform state (`terraform-state-go-deploy-tf-aws`)
 * ECR for the Docker images, to be used by the ECS tasks (`go-deploy-tf-aws`)
-* A domain for the app, ie: [Route 53 hostez zone](https://github.com/aarregui/go-deploy-tf-aws/blob/master/deploy/tf/variables.tf#L24-L26)
+* A domain for the app, ie: [Route 53 hosted zone](https://github.com/aarregui/go-deploy-tf-aws/blob/master/deploy/tf/variables.tf#L24-L26)
 
 To create the S3 bucket use:
 ```
