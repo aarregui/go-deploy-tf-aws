@@ -61,7 +61,7 @@ Semver is used for tagging, branches must be created with the correct format to 
 ## Local Development
 1. Run `cp .env.example .env`
 1. Run `make local-deps`
-    * [modd](https://github.com/cortesi/modd) is used to reload the server when `.go` files change.
+    * [air](https://github.com/air-verse/air) is used for hot reloading in local environments.
 
 To start the server in your host machine:
 1. Run `docker compose up -d go-deploy-tf-aws-db`

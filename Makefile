@@ -8,7 +8,7 @@ COV_HTML=${COVERAGE}.html
 all: deps build test
 
 local-deps:
-	go install github.com/cortesi/modd/cmd/modd@latest
+	go install github.com/air-verse/air@v1.52.3
 
 build:
 	go build -o ${BINARY_NAME} main.go
@@ -29,7 +29,7 @@ start-local: build
 	./${BINARY_NAME} serve
 
 watch:
-	modd
+	air
 
 reset:
 	docker-compose down -v
