@@ -38,8 +38,8 @@ func NewApp(
 func (a app) Serve() error {
 	r := a.setRoutes()
 
-	done := make(chan os.Signal, 1)
-	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
 	srv := &http.Server{
 		Addr:    ":" + a.config.App.Port,
@@ -53,13 +53,11 @@ func (a app) Serve() error {
 	}()
 	slog.Info(fmt.Sprintf("server version [%s] listening on post: %s", a.config.Version, a.config.App.Port))
 
-	<-done
+	<-ctx.Done()
 	slog.Info("server stopped")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer func() {
-		cancel()
-	}()
+	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
 		return err
 	}
